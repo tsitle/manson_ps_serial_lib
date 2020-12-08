@@ -8,6 +8,7 @@ from serial.serialutil import SerialException as pyser_SerialException
 import time
 
 try:
+	from .mi_commands import *
 	from .emulated_instrument_serial import EmulatedInstrumentSerial
 	from .exceptions import CouldNotConnectError
 	from .exceptions import FunctionNotSupportedForModelError
@@ -27,6 +28,7 @@ try:
 	from .models import MODEL_LIST_SSP90XX
 	from .serializer import *
 except (ModuleNotFoundError, ImportError):
+	from mi_commands import *
 	from emulated_instrument_serial import EmulatedInstrumentSerial
 	from exceptions import CouldNotConnectError
 	from exceptions import FunctionNotSupportedForModelError
@@ -170,7 +172,7 @@ class MansonInstrument(object):
 		"""
 		if self._modelId is not None:
 			return self._modelId
-		response = self._lowlev_send_get_cmd("GMOD")
+		response = self._lowlev_send_get_cmd(MICMD_GMOD)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_MODEL])
 		if tmpUd[0]["val"].endswith("@"):
@@ -187,7 +189,7 @@ class MansonInstrument(object):
 		"""
 		if self._modelVers is not None:
 			return self._modelVers
-		response = self._lowlev_send_get_cmd("GVER")
+		response = self._lowlev_send_get_cmd(MICMD_GVER)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_VER])
 		tmpVer = tmpUd[0]["val"]
@@ -238,7 +240,7 @@ class MansonInstrument(object):
 		Returns:
 			bool: True if on, False if off
 		"""
-		response = self._lowlev_send_get_cmd("GOUT")
+		response = self._lowlev_send_get_cmd(MICMD_GOUT)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_STATE])
 		tmpState = tmpUd[0]["val"]
@@ -253,7 +255,7 @@ class MansonInstrument(object):
 		assert state == True or state == False, "state needs to be bool"
 		#
 		cargs = self._szrObj.serialize_data([state], [SZR_VTYPE_STATE])
-		self._lowlev_send_set_cmd("SOUT", cargs)
+		self._lowlev_send_set_cmd(MICMD_SOUT, cargs)
 
 	# --------------------------------------------------------------------------
 	# All Series but HCS Series
@@ -271,9 +273,9 @@ class MansonInstrument(object):
 		#
 		cmd = ""
 		if self._modelId in MODEL_LIST_SERIES_NTP:
-			cmd = "GVSH"
+			cmd = MICMD_GVSH
 		else:
-			cmd = "GOVP"
+			cmd = MICMD_GOVP
 		response = self._lowlev_send_get_cmd(cmd)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_VOLT])
@@ -307,9 +309,9 @@ class MansonInstrument(object):
 		#
 		cmd = ""
 		if self._modelId in MODEL_LIST_SERIES_NTP:
-			cmd = "GISH"
+			cmd = MICMD_GISH
 		else:
-			cmd = "GOCP"
+			cmd = MICMD_GOCP
 		response = self._lowlev_send_get_cmd(cmd)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_CURR])
@@ -345,7 +347,7 @@ class MansonInstrument(object):
 			raise FunctionNotSupportedForModelError()
 		assert state == True or state == False, "state needs to be bool"
 		#
-		self._lowlev_send_set_cmd("ENDS" if state else "SESS", "")
+		self._lowlev_send_set_cmd(MICMD_ENDS if state else MICMD_SESS, "")
 
 	def load_memory_preset(self, index):
 		""" Load saved Voltage and Current values from PS memory locations
@@ -383,9 +385,9 @@ class MansonInstrument(object):
 		if self._modelId in MODEL_LIST_SERIES_SSP:
 			if self._modelId in MODEL_LIST_SSP90XX:
 				index += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
-			cmd = "SABC"
+			cmd = MICMD_SABC
 		else:
-			cmd = "RUNM"
+			cmd = MICMD_RUNM
 		cargs = self._szrObj.serialize_data([index], [SZR_VTYPE_IX])
 		self._lowlev_send_set_cmd(cmd, cargs)
 
@@ -421,12 +423,12 @@ class MansonInstrument(object):
 		memPresets[index]["curr"] = curr
 		#
 		if self._modelId in MODEL_LIST_SERIES_SSP:
-			cmd = "SETD"
+			cmd = MICMD_SETD
 			if self._modelId in MODEL_LIST_SSP90XX:
 				index += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 			cargs = self._szrObj.serialize_data([index, volt, curr], [SZR_VTYPE_IX, SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		else:
-			cmd = "PROM"
+			cmd = MICMD_PROM
 			valArr = []
 			vtArr = []
 			for ix in range(hwSpecs["realMemPresetLocations"]):
@@ -456,7 +458,7 @@ class MansonInstrument(object):
 		#
 		if self._hwMax is not None:
 			return deepcopy(self._hwMax)
-		response = self._lowlev_send_get_cmd("GMAX")
+		response = self._lowlev_send_get_cmd(MICMD_GMAX)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		tmpV = tmpUd[0]["val"]
@@ -484,7 +486,7 @@ class MansonInstrument(object):
 			cargs = self._szrObj.serialize_data([0], [SZR_VTYPE_IX])
 		else:
 			cargs = ""
-		response = self._lowlev_send_get_cmd("GETS", cargs)
+		response = self._lowlev_send_get_cmd(MICMD_GETS, cargs)
 		#
 		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
 			vt1 = SZR_VTYPE_VARVOLT
@@ -513,7 +515,7 @@ class MansonInstrument(object):
 		#
 		if self._modelId in MODEL_LIST_SERIES_NTP:
 			cargs = self._szrObj.serialize_data([volt, curr], [SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
-			self._lowlev_send_set_cmd("SETD", cargs)
+			self._lowlev_send_set_cmd(MICMD_SETD, cargs)
 		else:
 			self.set_preset_voltage(volt)
 			self.set_preset_current(curr)
@@ -562,7 +564,7 @@ class MansonInstrument(object):
 		#
 		if self._hwMin is not None:
 			return deepcopy(self._hwMin)
-		response = self._lowlev_send_get_cmd("GMIN")
+		response = self._lowlev_send_get_cmd(MICMD_GMIN)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		tmpV = tmpUd[0]["val"]
@@ -586,7 +588,7 @@ class MansonInstrument(object):
 		if self._modelId not in MODEL_LIST_SSP80XX:
 			raise FunctionNotSupportedForModelError()
 		#
-		response = self._lowlev_send_get_cmd("GCHA")
+		response = self._lowlev_send_get_cmd(MICMD_GCHA)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_RANGE])
 		rangeId = str(tmpUd[0]["val"])
@@ -609,7 +611,7 @@ class MansonInstrument(object):
 			raise ValueError("rangeId needs to be one of RANGE_ID_*")
 		#
 		cargs = self._szrObj.serialize_data([int(rangeId)], [SZR_VTYPE_RANGE])
-		self._lowlev_send_set_cmd("SCHA", cargs)
+		self._lowlev_send_set_cmd(MICMD_SCHA, cargs)
 
 	# --------------------------------------------------------------------------
 	# SSP Series only
@@ -625,7 +627,7 @@ class MansonInstrument(object):
 		if self._modelId not in MODEL_LIST_SERIES_SSP:
 			raise FunctionNotSupportedForModelError()
 		#
-		response = self._lowlev_send_get_cmd("GABC")
+		response = self._lowlev_send_get_cmd(MICMD_GABC)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_IX])
 		tmpIx = tmpUd[0]["val"]
@@ -704,7 +706,7 @@ class MansonInstrument(object):
 		assert isinstance(varName, str), "varName needs to be string"
 		assert isVolt == True or isVolt == False, "isVolt needs to be bool"
 		#
-		cmd = "VOLT" if isVolt else "CURR"
+		cmd = MICMD_VOLT if isVolt else MICMD_CURR
 		valArr = []
 		vtArr = []
 		if self._modelId in MODEL_LIST_SERIES_SSP:
@@ -730,9 +732,9 @@ class MansonInstrument(object):
 		assert isVolt == True or isVolt == False, "isVolt needs to be bool"
 		#
 		if self._modelId in MODEL_LIST_SERIES_NTP:
-			cmd = "SVSH" if isVolt else "SISH"
+			cmd = MICMD_SVSH if isVolt else MICMD_SISH
 		else:
-			cmd = "SOVP" if isVolt else "SOCP"
+			cmd = MICMD_SOVP if isVolt else MICMD_SOCP
 		cargs = self._szrObj.serialize_data([valFloat], [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR])
 		return {"cmd": cmd, "cargs": cargs}
 
@@ -742,7 +744,7 @@ class MansonInstrument(object):
 		Returns:
 			dict: {"volt": float, "curr": float, "mode": str}
 		"""
-		response = self._lowlev_send_get_cmd("GETD")
+		response = self._lowlev_send_get_cmd(MICMD_GETD)
 		#
 		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
 			vt1 = SZR_VTYPE_VARVOLT
@@ -775,13 +777,13 @@ class MansonInstrument(object):
 				if self._modelId in MODEL_LIST_SSP90XX:
 					tmpIx += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 				cargs = self._szrObj.serialize_data([tmpIx], [SZR_VTYPE_IX])
-				response = self._lowlev_send_get_cmd("GETS", cargs)
+				response = self._lowlev_send_get_cmd(MICMD_GETS, cargs)
 				tmpUd = self._szrObj.unserialize_data(response, vtArr)
 				tmpV = tmpUd[0]["val"]
 				tmpC = tmpUd[1]["val"]
 				self._memPresets.append({"volt": tmpV, "curr": tmpC})
 		else:
-			response = self._lowlev_send_get_cmd("GETM")
+			response = self._lowlev_send_get_cmd(MICMD_GETM)
 			#
 			vtArr = []
 			for ix in range(hwSpecs["realMemPresetLocations"]):

@@ -3,6 +3,7 @@
 #
 
 try:
+	from .mi_commands import *
 	from .exceptions import InvalidModelError
 	from .exceptions import NotConnectedError
 	from .exceptions import UnknownCommandError
@@ -19,6 +20,7 @@ try:
 	from .models import MODEL_LIST_SSP90XX
 	from .serializer import *
 except (ModuleNotFoundError, ImportError):
+	from mi_commands import *
 	from exceptions import InvalidModelError
 	from exceptions import NotConnectedError
 	from exceptions import UnknownCommandError
@@ -188,45 +190,45 @@ class EmulatedInstrumentSerial(object):
 		cmdStr = inpStr[0:4]
 		cargsStr = inpStr[4:]
 		#print(" <- EIS.hi '%s:%s' -- " % (cmdStr, cargsStr))
-		if cmdStr == "GMOD":
+		if cmdStr == MICMD_GMOD:
 			self._cmd_gmod(cargsStr)
-		elif cmdStr == "GVER":
+		elif cmdStr == MICMD_GVER:
 			self._cmd_gver(cargsStr)
-		elif cmdStr == "ENDS" or cmdStr == "SESS":
+		elif cmdStr == MICMD_ENDS or cmdStr == MICMD_SESS:
 			self._cmd_ends_or_sess(cargsStr)
-		elif cmdStr == "VOLT" or cmdStr == "CURR":
-			self._cmd_volt_or_curr(cargsStr, isVolt=(cmdStr == "VOLT"))
-		elif cmdStr == "GETD":
+		elif cmdStr == MICMD_VOLT or cmdStr == MICMD_CURR:
+			self._cmd_volt_or_curr(cargsStr, isVolt=(cmdStr == MICMD_VOLT))
+		elif cmdStr == MICMD_GETD:
 			self._cmd_getd(cargsStr)
-		elif cmdStr == "GETS":
+		elif cmdStr == MICMD_GETS:
 			self._cmd_gets(cargsStr)
-		elif cmdStr == "GMIN" or cmdStr == "GMAX":
-			self._cmd_gmin_or_gmax(cargsStr, isGmin=(cmdStr == "GMIN"))
-		elif cmdStr == "SOUT":
+		elif cmdStr == MICMD_GMIN or cmdStr == MICMD_GMAX:
+			self._cmd_gmin_or_gmax(cargsStr, isGmin=(cmdStr == MICMD_GMIN))
+		elif cmdStr == MICMD_SOUT:
 			self._cmd_sout(cargsStr)
-		elif cmdStr == "GOUT":
+		elif cmdStr == MICMD_GOUT:
 			self._cmd_gout(cargsStr)
-		elif cmdStr == "GETM":
+		elif cmdStr == MICMD_GETM:
 			self._cmd_getm(cargsStr)
-		elif cmdStr == "PROM":
+		elif cmdStr == MICMD_PROM:
 			self._cmd_prom(cargsStr)
-		elif cmdStr == "RUNM" or cmdStr == "SABC":
-			self._cmd_runm_or_sabc(cargsStr, isRunm=(cmdStr == "RUNM"))
-		elif cmdStr == "SOVP" or cmdStr == "SOCP":
-			self._cmd_sovp_or_socp(cargsStr, isVolt=(cmdStr == "SOVP"))
-		elif cmdStr == "GOVP" or cmdStr == "GOCP":
-			self._cmd_govp_or_gocp(cargsStr, isVolt=(cmdStr == "GOVP"))
-		elif cmdStr == "SVSH" or cmdStr == "SISH":
-			self._cmd_svsh_or_sish(cargsStr, isVolt=(cmdStr == "SVSH"))
-		elif cmdStr == "GVSH" or cmdStr == "GISH":
-			self._cmd_gvsh_or_gish(cargsStr, isVolt=(cmdStr == "GVSH"))
-		elif cmdStr == "SETD":
-			self._cmd_setd(cargsStr)
-		elif cmdStr == "GABC":
+		elif cmdStr == MICMD_GABC:
 			self._cmd_gabc(cargsStr)
-		elif cmdStr == "GCHA":
+		elif cmdStr == MICMD_RUNM or cmdStr == MICMD_SABC:
+			self._cmd_runm_or_sabc(cargsStr, isRunm=(cmdStr == MICMD_RUNM))
+		elif cmdStr == MICMD_SOVP or cmdStr == MICMD_SOCP:
+			self._cmd_sovp_or_socp(cargsStr, isVolt=(cmdStr == MICMD_SOVP))
+		elif cmdStr == MICMD_GOVP or cmdStr == MICMD_GOCP:
+			self._cmd_govp_or_gocp(cargsStr, isVolt=(cmdStr == MICMD_GOVP))
+		elif cmdStr == MICMD_SVSH or cmdStr == MICMD_SISH:
+			self._cmd_svsh_or_sish(cargsStr, isVolt=(cmdStr == MICMD_SVSH))
+		elif cmdStr == MICMD_GVSH or cmdStr == MICMD_GISH:
+			self._cmd_gvsh_or_gish(cargsStr, isVolt=(cmdStr == MICMD_GVSH))
+		elif cmdStr == MICMD_SETD:
+			self._cmd_setd(cargsStr)
+		elif cmdStr == MICMD_GCHA:
 			self._cmd_gcha(cargsStr)
-		elif cmdStr == "SCHA":
+		elif cmdStr == MICMD_SCHA:
 			self._cmd_scha(cargsStr)
 		else:
 			raise UnknownCommandError(cmdStr)
