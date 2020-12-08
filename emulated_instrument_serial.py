@@ -48,6 +48,9 @@ class EmulatedInstrumentSerial(object):
 		self.flushInput()
 		self.flushOutput()
 		#
+		self._inpCmdStr = None
+		self._inpCargsStr = None
+		#
 		self._szrObj = Serializer()
 		#
 		self._states = {
@@ -188,69 +191,70 @@ class EmulatedInstrumentSerial(object):
 		if "\r" in inpStr:
 			return
 		cmdStr = inpStr[0:4]
-		cargsStr = inpStr[4:]
-		#print(" <- EIS.hi '%s:%s' -- " % (cmdStr, cargsStr))
+		self._inpCmdStr = cmdStr
+		self._inpCargsStr = inpStr[4:] + SZR_RESP_OK_SUFFIX
+		#print(" <- EIS.hi '%s:%s' -- " % (cmdStr, self._inpCargsStr))
 		if cmdStr == MICMD_GMOD:
-			self._cmd_gmod(cargsStr)
+			self._cmd_gmod()
 		elif cmdStr == MICMD_GVER:
-			self._cmd_gver(cargsStr)
+			self._cmd_gver()
 		elif cmdStr == MICMD_ENDS or cmdStr == MICMD_SESS:
-			self._cmd_ends_or_sess(cargsStr)
+			self._cmd_ends_or_sess()
 		elif cmdStr == MICMD_VOLT or cmdStr == MICMD_CURR:
-			self._cmd_volt_or_curr(cargsStr, isVolt=(cmdStr == MICMD_VOLT))
+			self._cmd_volt_or_curr()
 		elif cmdStr == MICMD_GETD:
-			self._cmd_getd(cargsStr)
+			self._cmd_getd()
 		elif cmdStr == MICMD_GETS:
-			self._cmd_gets(cargsStr)
+			self._cmd_gets()
 		elif cmdStr == MICMD_GMIN or cmdStr == MICMD_GMAX:
-			self._cmd_gmin_or_gmax(cargsStr, isGmin=(cmdStr == MICMD_GMIN))
+			self._cmd_gmin_or_gmax()
 		elif cmdStr == MICMD_SOUT:
-			self._cmd_sout(cargsStr)
+			self._cmd_sout()
 		elif cmdStr == MICMD_GOUT:
-			self._cmd_gout(cargsStr)
+			self._cmd_gout()
 		elif cmdStr == MICMD_GETM:
-			self._cmd_getm(cargsStr)
+			self._cmd_getm()
 		elif cmdStr == MICMD_PROM:
-			self._cmd_prom(cargsStr)
+			self._cmd_prom()
 		elif cmdStr == MICMD_GABC:
-			self._cmd_gabc(cargsStr)
+			self._cmd_gabc()
 		elif cmdStr == MICMD_RUNM or cmdStr == MICMD_SABC:
-			self._cmd_runm_or_sabc(cargsStr, isRunm=(cmdStr == MICMD_RUNM))
+			self._cmd_runm_or_sabc()
 		elif cmdStr == MICMD_SOVP or cmdStr == MICMD_SOCP:
-			self._cmd_sovp_or_socp(cargsStr, isVolt=(cmdStr == MICMD_SOVP))
+			self._cmd_sovp_or_socp()
 		elif cmdStr == MICMD_GOVP or cmdStr == MICMD_GOCP:
-			self._cmd_govp_or_gocp(cargsStr, isVolt=(cmdStr == MICMD_GOVP))
+			self._cmd_govp_or_gocp()
 		elif cmdStr == MICMD_SVSH or cmdStr == MICMD_SISH:
-			self._cmd_svsh_or_sish(cargsStr, isVolt=(cmdStr == MICMD_SVSH))
+			self._cmd_svsh_or_sish()
 		elif cmdStr == MICMD_GVSH or cmdStr == MICMD_GISH:
-			self._cmd_gvsh_or_gish(cargsStr, isVolt=(cmdStr == MICMD_GVSH))
+			self._cmd_gvsh_or_gish()
 		elif cmdStr == MICMD_SETD:
-			self._cmd_setd(cargsStr)
+			self._cmd_setd()
 		elif cmdStr == MICMD_GCHA:
-			self._cmd_gcha(cargsStr)
+			self._cmd_gcha()
 		elif cmdStr == MICMD_SCHA:
-			self._cmd_scha(cargsStr)
+			self._cmd_scha()
 		else:
 			raise UnknownCommandError(cmdStr)
 
 	def _append_output(self, outpStr):
 		self._bufferOut += bytes(outpStr + "OK\r", encoding="utf-8")
 
-	def _cmd_gmod(self, cargsStr):
-		self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [])
+	def _cmd_gmod(self):
+		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		self._append_output(self._modelId + "\r")
 
-	def _cmd_gver(self, cargsStr):
-		self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [])
+	def _cmd_gver(self):
+		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		self._append_output("PSEUDO-V1.0" + "\r")
 
-	def _cmd_ends_or_sess(self, cargsStr):
+	def _cmd_ends_or_sess(self):
 		if self._modelId in MODEL_LIST_SERIES_NTP:
 			return
-		self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [])
+		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		self._append_output("")
 
-	def _cmd_volt_or_curr(self, cargsStr, isVolt):
+	def _cmd_volt_or_curr(self):
 		if self._modelId in MODEL_LIST_SSP80XX:
 			return
 		try:
@@ -259,15 +263,16 @@ class EmulatedInstrumentSerial(object):
 			if self._modelId in MODEL_LIST_SERIES_SSP:
 				listValueTypes.append(SZR_VTYPE_IX)
 				valVcIx = 1
+			isVolt = (self._inpCmdStr == MICMD_VOLT)
 			listValueTypes.append(SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR)
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("preset_" + ("volt" if isVolt else "curr"), valArr[valVcIx]["val"])
 			self._set_state("disp_" + ("volt" if isVolt else "curr"), valArr[valVcIx]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
-	def _cmd_getd(self, cargsStr):
+	def _cmd_getd(self):
 		outpStr = ""
 		valVolt = self._get_state("disp_volt")
 		valCurr = self._get_state("disp_curr")
@@ -289,11 +294,11 @@ class EmulatedInstrumentSerial(object):
 		outpStr = self._szrObj.serialize_data([valVolt, valCurr, valMode], listValueTypes)
 		self._append_output(outpStr)
 
-	def _cmd_gets(self, cargsStr):
+	def _cmd_gets(self):
 		psIx = -1
 		try:
 			if self._modelId in MODEL_LIST_SERIES_SSP:
-				valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [SZR_VTYPE_IX])
+				valArr = self._szrObj.unserialize_data(self._inpCargsStr, [SZR_VTYPE_IX])
 				psIx = valArr[0]["val"]
 		except InvalidInputDataError:
 			return
@@ -331,7 +336,8 @@ class EmulatedInstrumentSerial(object):
 		outpStr = self._szrObj.serialize_data([valVolt, valCurr], listValueTypes)
 		self._append_output(outpStr)
 
-	def _cmd_gmin_or_gmax(self, cargsStr, isGmin):
+	def _cmd_gmin_or_gmax(self):
+		isGmin = (self._inpCmdStr == MICMD_GMIN)
 		if isGmin and self._modelId not in MODEL_LIST_SERIES_NTP:
 			return
 		if not isGmin and not (self._modelId in MODEL_LIST_SERIES_HCS or \
@@ -344,20 +350,20 @@ class EmulatedInstrumentSerial(object):
 		outpStr = self._szrObj.serialize_data([valVolt, valCurr], listValueTypes)
 		self._append_output(outpStr)
 
-	def _cmd_sout(self, cargsStr):
+	def _cmd_sout(self):
 		try:
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [SZR_VTYPE_STATE])
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, [SZR_VTYPE_STATE])
 			self._set_state("outp_enabled", valArr[0]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
-	def _cmd_gout(self, cargsStr):
+	def _cmd_gout(self):
 		valState = self._get_state("outp_enabled")
 		outpStr = self._szrObj.serialize_data([valState], [SZR_VTYPE_STATE])
 		self._append_output(outpStr)
 
-	def _cmd_getm(self, cargsStr):
+	def _cmd_getm(self):
 		if self._modelId not in MODEL_LIST_SERIES_HCS:
 			return
 		outpStr = ""
@@ -367,7 +373,7 @@ class EmulatedInstrumentSerial(object):
 					[SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		self._append_output(outpStr)
 
-	def _cmd_prom(self, cargsStr):
+	def _cmd_prom(self):
 		if self._modelId not in MODEL_LIST_SERIES_HCS:
 			return
 		try:
@@ -375,21 +381,22 @@ class EmulatedInstrumentSerial(object):
 			for ix in range(self._hwSpecs["realMemPresetLocations"]):
 				listValueTypes.append(SZR_VTYPE_VOLT)
 				listValueTypes.append(SZR_VTYPE_CURR)
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			for ix in range(self._hwSpecs["realMemPresetLocations"]):
 				self._set_mempreset_state(ix, valArr[ix * 2]["val"], valArr[(ix * 2) + 1]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
-	def _cmd_runm_or_sabc(self, cargsStr, isRunm):
+	def _cmd_runm_or_sabc(self):
+		isRunm = (self._inpCmdStr == MICMD_RUNM)
 		if isRunm and self._modelId not in MODEL_LIST_SERIES_HCS:
 			return
 		if not isRunm and self._modelId not in MODEL_LIST_SERIES_SSP:
 			return
 		try:
 			listValueTypes = [SZR_VTYPE_IX]
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("active_preset", valArr[0]["val"])
 			if self._modelId in MODEL_LIST_SSP90XX:
 				valArr[0]["val"] -= 1
@@ -402,22 +409,24 @@ class EmulatedInstrumentSerial(object):
 			return
 		self._append_output("")
 
-	def _cmd_sovp_or_socp(self, cargsStr, isVolt):
+	def _cmd_sovp_or_socp(self):
 		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SERIES_HCS:
 			return
 		try:
+			isVolt = (self._inpCmdStr == MICMD_SOVP)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("over_" + ("volt" if isVolt else "curr") + "_prot", valArr[0]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
-	def _cmd_govp_or_gocp(self, cargsStr, isVolt):
+	def _cmd_govp_or_gocp(self):
 		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SERIES_HCS:
 			return
 		outpStr = ""
 		try:
+			isVolt = (self._inpCmdStr == MICMD_GOVP)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
 			valVC = self._get_state("over_" + ("volt" if isVolt else "curr") + "_prot")
 			outpStr = self._szrObj.serialize_data([valVC], listValueTypes)
@@ -425,22 +434,24 @@ class EmulatedInstrumentSerial(object):
 			return
 		self._append_output(outpStr)
 
-	def _cmd_svsh_or_sish(self, cargsStr, isVolt):
+	def _cmd_svsh_or_sish(self):
 		if self._modelId not in MODEL_LIST_SERIES_NTP:
 			return
 		try:
+			isVolt = (self._inpCmdStr == MICMD_SVSH)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("over_" + ("volt" if isVolt else "curr") + "_prot", valArr[0]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
-	def _cmd_gvsh_or_gish(self, cargsStr, isVolt):
+	def _cmd_gvsh_or_gish(self):
 		if self._modelId not in MODEL_LIST_SERIES_NTP:
 			return
 		outpStr = ""
 		try:
+			isVolt = (self._inpCmdStr == MICMD_GVSH)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
 			valVC = self._get_state("over_" + ("volt" if isVolt else "curr") + "_prot")
 			outpStr = self._szrObj.serialize_data([valVC], listValueTypes)
@@ -448,7 +459,7 @@ class EmulatedInstrumentSerial(object):
 			return
 		self._append_output(outpStr)
 
-	def _cmd_setd(self, cargsStr):
+	def _cmd_setd(self):
 		if self._modelId not in MODEL_LIST_SERIES_SSP and \
 				self._modelId not in MODEL_LIST_SERIES_NTP:
 			return
@@ -460,7 +471,7 @@ class EmulatedInstrumentSerial(object):
 				offsVcIx = 1
 			listValueTypes.append(SZR_VTYPE_VOLT)
 			listValueTypes.append(SZR_VTYPE_CURR)
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			#
 			saveAsPreset = False
 			presetIx = -1
@@ -487,28 +498,28 @@ class EmulatedInstrumentSerial(object):
 			return
 		self._append_output("")
 
-	def _cmd_gabc(self, cargsStr):
+	def _cmd_gabc(self):
 		if self._modelId not in MODEL_LIST_SERIES_SSP:
 			return
-		self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [])
+		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		valState = self._get_state("active_preset")
 		outpStr = self._szrObj.serialize_data([valState], [SZR_VTYPE_IX])
 		self._append_output(outpStr)
 
-	def _cmd_gcha(self, cargsStr):
+	def _cmd_gcha(self):
 		if self._modelId not in MODEL_LIST_SERIES_SSP:
 			return
-		self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, [])
+		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		valState = self._get_state("active_range")
 		outpStr = self._szrObj.serialize_data([valState], [SZR_VTYPE_RANGE])
 		self._append_output(outpStr)
 
-	def _cmd_scha(self, cargsStr):
+	def _cmd_scha(self):
 		if self._modelId not in MODEL_LIST_SERIES_SSP:
 			return
 		try:
 			listValueTypes = [SZR_VTYPE_RANGE]
-			valArr = self._szrObj.unserialize_data(cargsStr + SZR_RESP_OK_SUFFIX, listValueTypes)
+			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("active_range", valArr[0]["val"])
 		except InvalidInputDataError:
 			return
