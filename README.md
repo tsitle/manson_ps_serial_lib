@@ -2,17 +2,27 @@
 
 ## Prerequisites
 
-Installing Python3:
+### Installing Python3:
 
 - Debian/Ubuntu
 
 	```
-	$ sudo apt-get install python3
+	$ sudo apt-get install python3 python3-pip
 	```
-- macOS  
-	Python3 is pre-installed
+- macOS (tested on macOS 10.14 Mojave)  
+	Install [HomeBrew](https://brew.sh/index_de):
 
-Installing pySerial:
+	```
+	$ /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+	```
+
+	Install Python3:
+
+	```
+	$ brew install python3
+	```
+
+### Installing pySerial:
 
 see [pySerial Docs](https://pyserial.readthedocs.io/en/latest/pyserial.html#installation)
 
