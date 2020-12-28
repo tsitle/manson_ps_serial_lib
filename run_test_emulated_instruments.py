@@ -8,15 +8,11 @@ import argparse
 from os import linesep
 import sys
 
-from exceptions import InvalidModelError
-from exceptions import UnsupportedModelError
-from models import get_hw_model_id
-from models import TEST_MODEL_LIST
-from models import MODEL_LIST_SERIES_ALL
-from test_manson_instrument import TestMansonInstrument
-from test_manson_instrument import TEST_TYPE_KEY_ALL
-from test_manson_instrument import TEST_TYPES
-from test_manson_instrument import ALL_TEST_TYPE_KEYS
+from exceptions import InvalidModelError, UnsupportedModelError
+from models import get_hw_model_id as models_get_hw_model_id, \
+		TEST_MODEL_LIST, MODEL_LIST_SERIES_ALL
+from test_manson_instrument import TestMansonInstrument, \
+		TEST_TYPE_KEY_ALL, TEST_TYPES, ALL_TEST_TYPE_KEYS
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -61,7 +57,7 @@ def _get_parsed_args():
 	#
 	if args["mod"] and args["mod"] != "all":
 		try:
-			get_hw_model_id(args["mod"])
+			models_get_hw_model_id(args["mod"])
 		except (InvalidModelError, UnsupportedModelError):
 			print("! Warning: Unknown HW Model '%s'" % args["mod"], file=sys.stderr)
 	return args

@@ -3,16 +3,14 @@
 #
 
 try:
-	from .exceptions import InvalidInputDataError
-	from .exceptions import TestFailedError
-	from .models import get_hw_model_id
-	from .models import get_hw_specs
+	from .exceptions import InvalidInputDataError, TestFailedError
+	from .models import get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs
 	from .serializer import *
 except (ModuleNotFoundError, ImportError):
-	from exceptions import InvalidInputDataError
-	from exceptions import TestFailedError
-	from models import get_hw_model_id
-	from models import get_hw_specs
+	from exceptions import InvalidInputDataError, TestFailedError
+	from models import get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs
 	from serializer import *
 
 # ------------------------------------------------------------------------------
@@ -41,10 +39,10 @@ class TestSerializerMansonInstrument(object):
 		Parameters:
 			modelId (str): Hardware Model to simulate
 		"""
-		modelId = get_hw_model_id(modelId)
+		modelId = models_get_hw_model_id(modelId)
 		#
 		self._modelId = modelId
-		self._hwSpecs = get_hw_specs(modelId)
+		self._hwSpecs = models_get_hw_specs(modelId)
 		#
 		self._szrObj = Serializer()
 		self._szrObj.set_hw_specs(self._hwSpecs)

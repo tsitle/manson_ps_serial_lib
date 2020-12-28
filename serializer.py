@@ -7,10 +7,10 @@ import re
 
 try:
 	from .exceptions import InvalidInputDataError
-	from .models import build_spec_dict
+	from .models import build_spec_dict as models_build_spec_dict
 except (ModuleNotFoundError, ImportError):
 	from exceptions import InvalidInputDataError
-	from models import build_spec_dict
+	from models import build_spec_dict as models_build_spec_dict
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
@@ -39,7 +39,7 @@ SZR_LEN_RESP_OK_SUFFIX = len(SZR_RESP_OK_SUFFIX)
 
 class Serializer(object):
 	def __init__(self):
-		self._hwSpecs = build_spec_dict()
+		self._modelSpecs = models_build_spec_dict()
 
 	# --------------------------------------------------------------------------
 
@@ -51,7 +51,7 @@ class Serializer(object):
 		"""
 		assert isinstance(hwSpecs, dict), "hwSpecs needs to be dict"
 		#
-		self._hwSpecs = deepcopy(hwSpecs)
+		self._modelSpecs = deepcopy(hwSpecs)
 
 	def round_value(self, valFloat, isVolt):
 		""" Round a Voltage/Current value with respect to the hardware's capabilities
@@ -62,11 +62,11 @@ class Serializer(object):
 		Returns:
 			float
 		"""
-		assert self._hwSpecs is not None, "call set_hw_specs() first"
+		assert self._modelSpecs is not None, "call set_hw_specs() first"
 		assert isinstance(valFloat, (float, int)), "valFloat needs to be float or int"
 		assert isVolt == True or isVolt == False, "isVolt needs to be bool"
 		#
-		precVC = self._hwSpecs["precVolt" if isVolt else "precCurr"]
+		precVC = self._modelSpecs["precVolt" if isVolt else "precCurr"]
 		return round(float(valFloat), precVC)
 
 	def unserialize_data(self, valStr, listValueTypes):
@@ -92,7 +92,7 @@ class Serializer(object):
 		resA = []
 		if len(listValueTypes) == 0:
 			return resA
-		hwSpecs = self._hwSpecs
+		hwSpecs = self._modelSpecs
 		#
 		#print("  __ SZR.ud inp='%s' __  " % (valStr), end="")
 		for entryVt in listValueTypes:
@@ -188,7 +188,7 @@ class Serializer(object):
 			raise ValueError("len of valArr does not match listValueTypes")
 		resS = ""
 		entryIx = 0
-		hwSpecs = self._hwSpecs
+		hwSpecs = self._modelSpecs
 		#
 		for entryVal in valArr:
 			entryVt = listValueTypes[entryIx]
@@ -283,7 +283,7 @@ class Serializer(object):
 		valUnit = "V" if isVolt else "A"
 		valName = "voltage" if isVolt else "current"
 		#
-		tmpMinMax = self._hwSpecs
+		tmpMinMax = self._modelSpecs
 		keyMin = ("minVolt" if isVolt else "minCurr")
 		keyMax = ("maxVolt" if isVolt else "maxCurr")
 		if valFloat < tmpMinMax[keyMin]:
@@ -306,7 +306,7 @@ class Serializer(object):
 			ValueError
 		"""
 		substrLen = 0
-		hwSpecs = self._hwSpecs
+		hwSpecs = self._modelSpecs
 		if valueType == SZR_VTYPE_VOLT or valueType == SZR_VTYPE_CURR:
 			substrLen = hwSpecs["totalDigits"]
 		elif valueType == SZR_VTYPE_SPECVOLT or valueType == SZR_VTYPE_SPECCURR:

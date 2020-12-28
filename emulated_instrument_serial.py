@@ -4,37 +4,21 @@
 
 try:
 	from .mi_commands import *
-	from .exceptions import InvalidModelError
-	from .exceptions import NotConnectedError
-	from .exceptions import UnknownCommandError
-	from .exceptions import UnsupportedModelError
-	from .models import build_spec_dict
-	from .models import get_hw_model_id
-	from .models import get_hw_specs
-	from .models import MODEL_LIST_SERIES_HCS
-	from .models import MODEL_LIST_SERIES_NTP
-	from .models import MODEL_LIST_SERIES_SSP
-	from .models import MODEL_LIST_SSP80XX
-	from .models import MODEL_LIST_SSP81XX
-	from .models import MODEL_LIST_SSP83XX
-	from .models import MODEL_LIST_SSP90XX
+	from .exceptions import InvalidModelError, NotConnectedError, UnknownCommandError, UnsupportedModelError
+	from .models import build_spec_dict as models_build_spec_dict, \
+			get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs, \
+			MODEL_SERIES_ID_HCS, MODEL_SERIES_ID_NTP, MODEL_SERIES_ID_SSP, \
+			MODEL_SUBSERIES_ID_SSP80, MODEL_SUBSERIES_ID_SSP81, MODEL_SUBSERIES_ID_SSP83, MODEL_SUBSERIES_ID_SSP90
 	from .serializer import *
 except (ModuleNotFoundError, ImportError):
 	from mi_commands import *
-	from exceptions import InvalidModelError
-	from exceptions import NotConnectedError
-	from exceptions import UnknownCommandError
-	from exceptions import UnsupportedModelError
-	from models import build_spec_dict
-	from models import get_hw_model_id
-	from models import get_hw_specs
-	from models import MODEL_LIST_SERIES_HCS
-	from models import MODEL_LIST_SERIES_NTP
-	from models import MODEL_LIST_SERIES_SSP
-	from models import MODEL_LIST_SSP80XX
-	from models import MODEL_LIST_SSP81XX
-	from models import MODEL_LIST_SSP83XX
-	from models import MODEL_LIST_SSP90XX
+	from exceptions import InvalidModelError, NotConnectedError, UnknownCommandError, UnsupportedModelError
+	from models import build_spec_dict as models_build_spec_dict, \
+			get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs, \
+			MODEL_SERIES_ID_HCS, MODEL_SERIES_ID_NTP, MODEL_SERIES_ID_SSP, \
+			MODEL_SUBSERIES_ID_SSP80, MODEL_SUBSERIES_ID_SSP81, MODEL_SUBSERIES_ID_SSP83, MODEL_SUBSERIES_ID_SSP90
 	from serializer import *
 
 # ------------------------------------------------------------------------------
@@ -71,7 +55,10 @@ class EmulatedInstrumentSerial(object):
 					]
 			}
 		#
-		self._hwSpecs = None
+		self._modelSpecs = None
+		self._modelSeries = None
+		self._modelSubSeries = None
+		self._modelHwCmdSupp = None
 		self._modelId = None
 		self.update_model_id(modelId)
 
@@ -79,14 +66,17 @@ class EmulatedInstrumentSerial(object):
 
 	def update_model_id(self, modelId):
 		self._modelId = modelId
-		self._hwSpecs = build_spec_dict()
+		self._modelSpecs = models_build_spec_dict()
 		if modelId is not None:
 			try:
-				modelId = get_hw_model_id(modelId)
-				self._hwSpecs = get_hw_specs(modelId)
+				modelId = models_get_hw_model_id(modelId)
+				self._modelSpecs = models_get_hw_specs(modelId)
 			except (InvalidModelError, UnsupportedModelError):
 				pass
-		self._szrObj.set_hw_specs(self._hwSpecs)
+		self._modelSeries = self._modelSpecs["modelSeries"]
+		self._modelSubSeries = self._modelSpecs["modelSubSeries"]
+		self._modelHwCmdSupp = deepcopy(self._modelSpecs["hwCmdSupp"])
+		self._szrObj.set_hw_specs(self._modelSpecs)
 		#
 		self._update_state_minmax("preset_volt", "minVolt", "maxVolt")
 		self._update_state_minmax("preset_curr", "minCurr", "maxCurr")
@@ -94,7 +84,7 @@ class EmulatedInstrumentSerial(object):
 		self._update_state_minmax("disp_curr", "minCurr", "maxCurr")
 		self._update_state_minmax("over_volt_prot", "minVolt", "maxVolt")
 		self._update_state_minmax("over_curr_prot", "minCurr", "maxCurr")
-		for ix in range(self._hwSpecs["realMemPresetLocations"]):
+		for ix in range(self._modelSpecs["realMemPresetLocations"]):
 			self._update_mempreset_state_minmax(ix, True, "minVolt", "maxVolt")
 			self._update_mempreset_state_minmax(ix, False, "minCurr", "maxCurr")
 
@@ -129,7 +119,7 @@ class EmulatedInstrumentSerial(object):
 	# --------------------------------------------------------------------------
 
 	def _update_state_minmax(self, sid, dictKeyMin, dictKeyMax):
-		hwSpecs = self._hwSpecs
+		hwSpecs = self._modelSpecs
 		cval = self._get_state(sid)
 		if cval > hwSpecs[dictKeyMax]:
 			self._set_state(sid, hwSpecs[dictKeyMax])
@@ -137,7 +127,7 @@ class EmulatedInstrumentSerial(object):
 			self._set_state(sid, hwSpecs[dictKeyMin])
 
 	def _update_mempreset_state_minmax(self, ix, isVolt, dictKeyMin, dictKeyMax):
-		hwSpecs = self._hwSpecs
+		hwSpecs = self._modelSpecs
 		cvalD = self._get_mempreset_state(ix)
 		cvalVC = cvalD["volt" if isVolt else "curr"]
 		nvalV = cvalD["volt"]
@@ -191,9 +181,14 @@ class EmulatedInstrumentSerial(object):
 		if "\r" in inpStr:
 			return
 		cmdStr = inpStr[0:4]
+		if self._modelHwCmdSupp is None or not self._modelHwCmdSupp[cmdStr]:
+			#print(" <- EIS.hi '%s' unsupported -- " % (cmdStr))
+			return
+		#
 		self._inpCmdStr = cmdStr
 		self._inpCargsStr = inpStr[4:] + SZR_RESP_OK_SUFFIX
 		#print(" <- EIS.hi '%s:%s' -- " % (cmdStr, self._inpCargsStr))
+		#
 		if cmdStr == MICMD_GMOD:
 			self._cmd_gmod()
 		elif cmdStr == MICMD_GVER:
@@ -249,18 +244,14 @@ class EmulatedInstrumentSerial(object):
 		self._append_output("PSEUDO-V1.0" + "\r")
 
 	def _cmd_ends_or_sess(self):
-		if self._modelId in MODEL_LIST_SERIES_NTP:
-			return
 		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		self._append_output("")
 
 	def _cmd_volt_or_curr(self):
-		if self._modelId in MODEL_LIST_SSP80XX:
-			return
 		try:
 			listValueTypes = []
 			valVcIx = 0
-			if self._modelId in MODEL_LIST_SERIES_SSP:
+			if self._modelSeries == MODEL_SERIES_ID_SSP:
 				listValueTypes.append(SZR_VTYPE_IX)
 				valVcIx = 1
 			isVolt = (self._inpCmdStr == MICMD_VOLT)
@@ -278,14 +269,14 @@ class EmulatedInstrumentSerial(object):
 		valCurr = self._get_state("disp_curr")
 		valMode = self._get_state("output_mode")
 		listValueTypes = []
-		if self._modelId in MODEL_LIST_SERIES_HCS:
+		if self._modelSeries == MODEL_SERIES_ID_HCS:
 			listValueTypes.append(SZR_VTYPE_SPECVOLT)
 			listValueTypes.append(SZR_VTYPE_SPECCURR)
-		elif self._modelId in MODEL_LIST_SSP80XX or self._modelId in MODEL_LIST_SSP81XX or \
-				self._modelId in MODEL_LIST_SSP83XX:
+		elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80 or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP81 or \
+				self._modelSubSeries == MODEL_SUBSERIES_ID_SSP83:
 			listValueTypes.append(SZR_VTYPE_VOLT)
 			listValueTypes.append(SZR_VTYPE_CURR)
-		elif self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
+		elif self._modelSeries == MODEL_SERIES_ID_NTP or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			listValueTypes.append(SZR_VTYPE_VARVOLT)
 			listValueTypes.append(SZR_VTYPE_VARCURR)
 		else:
@@ -297,7 +288,7 @@ class EmulatedInstrumentSerial(object):
 	def _cmd_gets(self):
 		psIx = -1
 		try:
-			if self._modelId in MODEL_LIST_SERIES_SSP:
+			if self._modelSeries == MODEL_SERIES_ID_SSP:
 				valArr = self._szrObj.unserialize_data(self._inpCargsStr, [SZR_VTYPE_IX])
 				psIx = valArr[0]["val"]
 		except InvalidInputDataError:
@@ -307,26 +298,26 @@ class EmulatedInstrumentSerial(object):
 		valVolt = 0.0
 		valCurr = 0.0
 		listValueTypes = []
-		if self._modelId in MODEL_LIST_SERIES_HCS or \
-				((self._modelId in MODEL_LIST_SSP81XX or self._modelId in MODEL_LIST_SSP83XX) and psIx == 3):
+		if self._modelSeries == MODEL_SERIES_ID_HCS or \
+				((self._modelSubSeries == MODEL_SUBSERIES_ID_SSP81 or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP83) and psIx == 3):
 			listValueTypes.append(SZR_VTYPE_VOLT)
 			listValueTypes.append(SZR_VTYPE_CURR)
 			valVolt = self._get_state("preset_volt")
 			valCurr = self._get_state("preset_curr")
-		elif self._modelId in MODEL_LIST_SSP80XX or \
-				self._modelId in MODEL_LIST_SSP81XX or self._modelId in MODEL_LIST_SSP83XX:
+		elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80 or \
+				self._modelSubSeries == MODEL_SUBSERIES_ID_SSP81 or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP83:
 			listValueTypes.append(SZR_VTYPE_VOLT)
 			listValueTypes.append(SZR_VTYPE_CURR)
 			valStateD = self._get_mempreset_state(psIx)
 			valVolt = valStateD["volt"]
 			valCurr = valStateD["curr"]
-		elif self._modelId in MODEL_LIST_SSP90XX and psIx > 0:
+		elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90 and psIx > 0:
 			listValueTypes.append(SZR_VTYPE_VARVOLT)
 			listValueTypes.append(SZR_VTYPE_VARCURR)
 			valStateD = self._get_mempreset_state(psIx - 1)
 			valVolt = valStateD["volt"]
 			valCurr = valStateD["curr"]
-		elif self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
+		elif self._modelSeries == MODEL_SERIES_ID_NTP or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			listValueTypes.append(SZR_VTYPE_VARVOLT)
 			listValueTypes.append(SZR_VTYPE_VARCURR)
 			valVolt = self._get_state("preset_volt")
@@ -338,14 +329,8 @@ class EmulatedInstrumentSerial(object):
 
 	def _cmd_gmin_or_gmax(self):
 		isGmin = (self._inpCmdStr == MICMD_GMIN)
-		if isGmin and self._modelId not in MODEL_LIST_SERIES_NTP:
-			return
-		if not isGmin and not (self._modelId in MODEL_LIST_SERIES_HCS or \
-				self._modelId in MODEL_LIST_SERIES_NTP):
-			return
-		outpStr = ""
-		valVolt = self._hwSpecs[("min" if isGmin else "max") + "Volt"]
-		valCurr = self._hwSpecs[("min" if isGmin else "max") + "Curr"]
+		valVolt = self._modelSpecs[("min" if isGmin else "max") + "Volt"]
+		valCurr = self._modelSpecs[("min" if isGmin else "max") + "Curr"]
 		listValueTypes = [SZR_VTYPE_VOLT, SZR_VTYPE_CURR]
 		outpStr = self._szrObj.serialize_data([valVolt, valCurr], listValueTypes)
 		self._append_output(outpStr)
@@ -364,41 +349,32 @@ class EmulatedInstrumentSerial(object):
 		self._append_output(outpStr)
 
 	def _cmd_getm(self):
-		if self._modelId not in MODEL_LIST_SERIES_HCS:
-			return
 		outpStr = ""
-		for ix in range(self._hwSpecs["realMemPresetLocations"]):
+		for ix in range(self._modelSpecs["realMemPresetLocations"]):
 			valStateD = self._get_mempreset_state(ix)
 			outpStr += self._szrObj.serialize_data([valStateD["volt"], valStateD["curr"]],
 					[SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		self._append_output(outpStr)
 
 	def _cmd_prom(self):
-		if self._modelId not in MODEL_LIST_SERIES_HCS:
-			return
 		try:
 			listValueTypes = []
-			for ix in range(self._hwSpecs["realMemPresetLocations"]):
+			for ix in range(self._modelSpecs["realMemPresetLocations"]):
 				listValueTypes.append(SZR_VTYPE_VOLT)
 				listValueTypes.append(SZR_VTYPE_CURR)
 			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
-			for ix in range(self._hwSpecs["realMemPresetLocations"]):
+			for ix in range(self._modelSpecs["realMemPresetLocations"]):
 				self._set_mempreset_state(ix, valArr[ix * 2]["val"], valArr[(ix * 2) + 1]["val"])
 		except InvalidInputDataError:
 			return
 		self._append_output("")
 
 	def _cmd_runm_or_sabc(self):
-		isRunm = (self._inpCmdStr == MICMD_RUNM)
-		if isRunm and self._modelId not in MODEL_LIST_SERIES_HCS:
-			return
-		if not isRunm and self._modelId not in MODEL_LIST_SERIES_SSP:
-			return
 		try:
 			listValueTypes = [SZR_VTYPE_IX]
 			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)
 			self._set_state("active_preset", valArr[0]["val"])
-			if self._modelId in MODEL_LIST_SSP90XX:
+			if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 				valArr[0]["val"] -= 1
 			valStateD = self._get_mempreset_state(valArr[0]["val"])
 			self._set_state("preset_volt", valStateD["volt"])
@@ -410,8 +386,6 @@ class EmulatedInstrumentSerial(object):
 		self._append_output("")
 
 	def _cmd_sovp_or_socp(self):
-		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SERIES_HCS:
-			return
 		try:
 			isVolt = (self._inpCmdStr == MICMD_SOVP)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
@@ -422,8 +396,6 @@ class EmulatedInstrumentSerial(object):
 		self._append_output("")
 
 	def _cmd_govp_or_gocp(self):
-		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SERIES_HCS:
-			return
 		outpStr = ""
 		try:
 			isVolt = (self._inpCmdStr == MICMD_GOVP)
@@ -435,8 +407,6 @@ class EmulatedInstrumentSerial(object):
 		self._append_output(outpStr)
 
 	def _cmd_svsh_or_sish(self):
-		if self._modelId not in MODEL_LIST_SERIES_NTP:
-			return
 		try:
 			isVolt = (self._inpCmdStr == MICMD_SVSH)
 			listValueTypes = [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR]
@@ -447,8 +417,6 @@ class EmulatedInstrumentSerial(object):
 		self._append_output("")
 
 	def _cmd_gvsh_or_gish(self):
-		if self._modelId not in MODEL_LIST_SERIES_NTP:
-			return
 		outpStr = ""
 		try:
 			isVolt = (self._inpCmdStr == MICMD_GVSH)
@@ -460,13 +428,10 @@ class EmulatedInstrumentSerial(object):
 		self._append_output(outpStr)
 
 	def _cmd_setd(self):
-		if self._modelId not in MODEL_LIST_SERIES_SSP and \
-				self._modelId not in MODEL_LIST_SERIES_NTP:
-			return
 		try:
 			listValueTypes = []
 			offsVcIx = 0
-			if self._modelId in MODEL_LIST_SERIES_SSP:
+			if self._modelSeries == MODEL_SERIES_ID_SSP:
 				listValueTypes.append(SZR_VTYPE_IX)
 				offsVcIx = 1
 			listValueTypes.append(SZR_VTYPE_VOLT)
@@ -475,13 +440,13 @@ class EmulatedInstrumentSerial(object):
 			#
 			saveAsPreset = False
 			presetIx = -1
-			if self._modelId in MODEL_LIST_SSP80XX:
+			if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80:
 				presetIx = valArr[0]["val"]
 				saveAsPreset = True
-			elif self._modelId in MODEL_LIST_SSP81XX or self._modelId in MODEL_LIST_SSP83XX:
+			elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP81 or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP83:
 				presetIx = valArr[0]["val"]
 				saveAsPreset = (presetIx != 3)
-			elif self._modelId in MODEL_LIST_SSP90XX:
+			elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 				presetIx = valArr[0]["val"]
 				saveAsPreset = (presetIx > 0)
 				presetIx -= (1 if saveAsPreset else 0)
@@ -499,24 +464,18 @@ class EmulatedInstrumentSerial(object):
 		self._append_output("")
 
 	def _cmd_gabc(self):
-		if self._modelId not in MODEL_LIST_SERIES_SSP:
-			return
 		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		valState = self._get_state("active_preset")
 		outpStr = self._szrObj.serialize_data([valState], [SZR_VTYPE_IX])
 		self._append_output(outpStr)
 
 	def _cmd_gcha(self):
-		if self._modelId not in MODEL_LIST_SERIES_SSP:
-			return
 		self._szrObj.unserialize_data(self._inpCargsStr, [])
 		valState = self._get_state("active_range")
 		outpStr = self._szrObj.serialize_data([valState], [SZR_VTYPE_RANGE])
 		self._append_output(outpStr)
 
 	def _cmd_scha(self):
-		if self._modelId not in MODEL_LIST_SERIES_SSP:
-			return
 		try:
 			listValueTypes = [SZR_VTYPE_RANGE]
 			valArr = self._szrObj.unserialize_data(self._inpCargsStr, listValueTypes)

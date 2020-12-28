@@ -8,12 +8,9 @@ import argparse
 from serial.tools.list_ports import comports as pyser_get_comports
 import sys
 
-from test_manson_instrument import TestMansonInstrument
-from test_manson_instrument import TEST_TYPE_KEY_ALL
-from test_manson_instrument import TEST_TYPE_KEY_SER
-from test_manson_instrument import TEST_TYPE_KEY_SIMPLE
-from test_manson_instrument import TEST_TYPES
-from test_manson_instrument import ALL_TEST_TYPE_KEYS
+from test_manson_instrument import TestMansonInstrument, \
+		TEST_TYPE_KEY_ALL, TEST_TYPE_KEY_SER, TEST_TYPE_KEY_SIMPLE, TEST_TYPES, \
+		ALL_TEST_TYPE_KEYS
 
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------

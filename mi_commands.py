@@ -5,11 +5,11 @@
 # ------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------
 
-MICMD_GOUT = "GOUT"
-MICMD_SOUT = "SOUT"
-
 MICMD_GMOD = "GMOD"
 MICMD_GVER = "GVER"
+
+MICMD_GOUT = "GOUT"
+MICMD_SOUT = "SOUT"
 
 MICMD_ENDS = "ENDS"
 MICMD_SESS = "SESS"

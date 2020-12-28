@@ -7,28 +7,18 @@ import time
 import traceback
 
 try:
-	from .exceptions import FunctionNotSupportedForModelError
-	from .exceptions import InvalidModelError
-	from .exceptions import InvalidTestType
-	from .exceptions import TestFailedError
-	from .exceptions import UnsupportedModelError
-	from .manson_instrument import MansonInstrument
-	from .manson_instrument import VIRTUAL_SERIAL_DEVICE
-	from .manson_instrument import RANGE_ID_0_16V0_5A0
-	from .manson_instrument import RANGE_ID_1_27V0_3A0
-	from .manson_instrument import RANGE_ID_2_36V0_2A2
+	from .exceptions import FunctionNotSupportedForModelError, InvalidModelError, \
+			InvalidTestType, TestFailedError, UnsupportedModelError
+	from .manson_instrument import MansonInstrument, \
+			VIRTUAL_SERIAL_DEVICE, \
+			RANGE_ID_0_16V0_5A0, RANGE_ID_1_27V0_3A0, RANGE_ID_2_36V0_2A2
 	from .test_serializer_manson_instrument import TestSerializerMansonInstrument
 except (ModuleNotFoundError, ImportError):
-	from exceptions import FunctionNotSupportedForModelError
-	from exceptions import InvalidModelError
-	from exceptions import InvalidTestType
-	from exceptions import TestFailedError
-	from exceptions import UnsupportedModelError
-	from manson_instrument import MansonInstrument
-	from manson_instrument import VIRTUAL_SERIAL_DEVICE
-	from manson_instrument import RANGE_ID_0_16V0_5A0
-	from manson_instrument import RANGE_ID_1_27V0_3A0
-	from manson_instrument import RANGE_ID_2_36V0_2A2
+	from exceptions import FunctionNotSupportedForModelError, InvalidModelError, \
+			InvalidTestType, TestFailedError, UnsupportedModelError
+	from manson_instrument import MansonInstrument, \
+			VIRTUAL_SERIAL_DEVICE, \
+			RANGE_ID_0_16V0_5A0, RANGE_ID_1_27V0_3A0, RANGE_ID_2_36V0_2A2
 	from test_serializer_manson_instrument import TestSerializerMansonInstrument
 
 # ------------------------------------------------------------------------------

@@ -10,42 +10,26 @@ import time
 try:
 	from .mi_commands import *
 	from .emulated_instrument_serial import EmulatedInstrumentSerial
-	from .exceptions import CouldNotConnectError
-	from .exceptions import FunctionNotSupportedForModelError
-	from .exceptions import InvalidModelError
-	from .exceptions import InvalidResponseError
-	from .exceptions import NotConnectedError
-	from .exceptions import UnsupportedModelError
-	from .models import build_spec_dict
-	from .models import get_hw_model_id
-	from .models import get_hw_specs
-	from .models import MODEL_LIST_SERIES_HCS
-	from .models import MODEL_LIST_SERIES_NTP
-	from .models import MODEL_LIST_SERIES_SSP
-	from .models import MODEL_LIST_SSP80XX
-	from .models import MODEL_LIST_SSP81XX
-	from .models import MODEL_LIST_SSP83XX
-	from .models import MODEL_LIST_SSP90XX
+	from .exceptions import CouldNotConnectError, \
+			FunctionNotSupportedForModelError, InvalidModelError, \
+			InvalidResponseError, NotConnectedError, UnsupportedModelError
+	from .models import build_spec_dict as models_build_spec_dict, \
+			get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs, \
+			MODEL_SERIES_ID_HCS, MODEL_SERIES_ID_NTP, MODEL_SERIES_ID_SSP, \
+			MODEL_SUBSERIES_ID_SSP80, MODEL_SUBSERIES_ID_SSP81, MODEL_SUBSERIES_ID_SSP83, MODEL_SUBSERIES_ID_SSP90
 	from .serializer import *
 except (ModuleNotFoundError, ImportError):
 	from mi_commands import *
 	from emulated_instrument_serial import EmulatedInstrumentSerial
-	from exceptions import CouldNotConnectError
-	from exceptions import FunctionNotSupportedForModelError
-	from exceptions import InvalidModelError
-	from exceptions import InvalidResponseError
-	from exceptions import NotConnectedError
-	from exceptions import UnsupportedModelError
-	from models import build_spec_dict
-	from models import get_hw_model_id
-	from models import get_hw_specs
-	from models import MODEL_LIST_SERIES_HCS
-	from models import MODEL_LIST_SERIES_NTP
-	from models import MODEL_LIST_SERIES_SSP
-	from models import MODEL_LIST_SSP80XX
-	from models import MODEL_LIST_SSP81XX
-	from models import MODEL_LIST_SSP83XX
-	from models import MODEL_LIST_SSP90XX
+	from exceptions import CouldNotConnectError, \
+			FunctionNotSupportedForModelError, InvalidModelError, \
+			InvalidResponseError, NotConnectedError, UnsupportedModelError
+	from models import build_spec_dict as models_build_spec_dict, \
+			get_hw_model_id as models_get_hw_model_id, \
+			get_hw_specs as models_get_hw_specs, \
+			MODEL_SERIES_ID_HCS, MODEL_SERIES_ID_NTP, MODEL_SERIES_ID_SSP, \
+			MODEL_SUBSERIES_ID_SSP80, MODEL_SUBSERIES_ID_SSP81, MODEL_SUBSERIES_ID_SSP83, MODEL_SUBSERIES_ID_SSP90
 	from serializer import *
 
 # ------------------------------------------------------------------------------
@@ -69,6 +53,9 @@ class MansonInstrument(object):
 		self._modelId = None
 		self._modelVers = None
 		self._modelSpecs = None
+		self._modelSeries = None
+		self._modelSubSeries = None
+		self._modelHwCmdSupp = None
 		self._hwMin = None
 		self._hwMax = None
 		self._memPresets = None
@@ -151,14 +138,17 @@ class MansonInstrument(object):
 				return deepcopy(self._modelSpecs)
 			modelId = self._modelId
 		#
-		hwSpecs = build_spec_dict()
+		hwSpecs = models_build_spec_dict()
 		if modelId is not None:
 			try:
-				hwSpecs = get_hw_specs(modelId)
+				hwSpecs = models_get_hw_specs(modelId)
 			except (InvalidModelError, UnsupportedModelError):
 				pass
 		if modelIdOrg == "" or modelIdOrg is None:
 			self._modelSpecs = deepcopy(hwSpecs)
+			self._modelSeries = self._modelSpecs["modelSeries"]
+			self._modelSubSeries = self._modelSpecs["modelSubSeries"]
+			self._modelHwCmdSupp = deepcopy(self._modelSpecs["hwCmdSupp"])
 		return deepcopy(hwSpecs)
 
 	# --------------------------------------------------------------------------
@@ -177,7 +167,7 @@ class MansonInstrument(object):
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_MODEL])
 		if tmpUd[0]["val"].endswith("@"):
 			tmpUd[0]["val"] = tmpUd[0]["val"][:-1]
-		resS = get_hw_model_id(tmpUd[0]["val"])
+		resS = models_get_hw_model_id(tmpUd[0]["val"])
 		self._modelId = resS
 		return resS
 
@@ -254,8 +244,11 @@ class MansonInstrument(object):
 		"""
 		assert state == True or state == False, "state needs to be bool"
 		#
+		cmd = MICMD_SOUT
+		self._check_hwCmdSupp(cmd)
+		#
 		cargs = self._szrObj.serialize_data([state], [SZR_VTYPE_STATE])
-		self._lowlev_send_set_cmd(MICMD_SOUT, cargs)
+		self._lowlev_send_set_cmd(cmd, cargs)
 
 	# --------------------------------------------------------------------------
 	# All Series but HCS Series
@@ -265,14 +258,9 @@ class MansonInstrument(object):
 
 		Returns:
 			float
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_HCS:
-			raise FunctionNotSupportedForModelError()
-		#
 		cmd = ""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
+		if self._modelSeries == MODEL_SERIES_ID_NTP:
 			cmd = MICMD_GVSH
 		else:
 			cmd = MICMD_GOVP
@@ -287,12 +275,7 @@ class MansonInstrument(object):
 
 		Parameters:
 			volt (float): Voltage value
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_HCS:
-			raise FunctionNotSupportedForModelError()
-		#
 		cmdAndCargs = self._get_cmd_set_ovp_or_ocp(volt, "volt", isVolt=True)
 		self._lowlev_send_set_cmd(cmdAndCargs["cmd"], cmdAndCargs["cargs"])
 
@@ -301,14 +284,9 @@ class MansonInstrument(object):
 
 		Returns:
 			float
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_HCS:
-			raise FunctionNotSupportedForModelError()
-		#
 		cmd = ""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
+		if self._modelSeries == MODEL_SERIES_ID_NTP:
 			cmd = MICMD_GISH
 		else:
 			cmd = MICMD_GOCP
@@ -323,12 +301,7 @@ class MansonInstrument(object):
 
 		Parameters:
 			curr (float): Current value
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_HCS:
-			raise FunctionNotSupportedForModelError()
-		#
 		cmdAndCargs = self._get_cmd_set_ovp_or_ocp(curr, "curr", isVolt=False)
 		self._lowlev_send_set_cmd(cmdAndCargs["cmd"], cmdAndCargs["cargs"])
 
@@ -340,11 +313,7 @@ class MansonInstrument(object):
 
 		Parameters:
 			state (bool): If True allow user input, else disallow
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
-			raise FunctionNotSupportedForModelError()
 		assert state == True or state == False, "state needs to be bool"
 		#
 		self._lowlev_send_set_cmd(MICMD_ENDS if state else MICMD_SESS, "")
@@ -356,11 +325,7 @@ class MansonInstrument(object):
 			index (int): Index of memory location to load
 		Returns:
 			dict: {"volt": value, "curr": value}
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
-			raise FunctionNotSupportedForModelError()
 		assert isinstance(index, int), "index needs to be int"
 		hwSpecs = self.get_hw_specs()
 		assert index >= 0 and index < hwSpecs["realMemPresetLocations"], "index out of range (0..%d)" % (hwSpecs["realMemPresetLocations"] - 1)
@@ -373,21 +338,19 @@ class MansonInstrument(object):
 
 		Parameters:
 			index (int): Index of memory location to apply
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
-			raise FunctionNotSupportedForModelError()
 		assert isinstance(index, int), "index needs to be int"
 		hwSpecs = self.get_hw_specs()
 		assert index >= 0 and index < hwSpecs["realMemPresetLocations"], "index out of range (0..%d)" % (hwSpecs["realMemPresetLocations"] - 1)
 		#
-		if self._modelId in MODEL_LIST_SERIES_SSP:
-			if self._modelId in MODEL_LIST_SSP90XX:
+		if self._modelSeries == MODEL_SERIES_ID_SSP:
+			if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 				index += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 			cmd = MICMD_SABC
 		else:
 			cmd = MICMD_RUNM
+		self._check_hwCmdSupp(cmd)
+		#
 		cargs = self._szrObj.serialize_data([index], [SZR_VTYPE_IX])
 		self._lowlev_send_set_cmd(cmd, cargs)
 
@@ -400,11 +363,7 @@ class MansonInstrument(object):
 			curr (float): Current value
 		Returns:
 			bool: True if memory preset was changed, False if not
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_NTP:
-			raise FunctionNotSupportedForModelError()
 		assert isinstance(index, int), "index needs to be int"
 		hwSpecs = self.get_hw_specs()
 		assert index >= 0 and index < hwSpecs["realMemPresetLocations"], "index out of range (0..%d)" % (hwSpecs["realMemPresetLocations"] - 1)
@@ -422,13 +381,17 @@ class MansonInstrument(object):
 		memPresets[index]["volt"] = volt
 		memPresets[index]["curr"] = curr
 		#
-		if self._modelId in MODEL_LIST_SERIES_SSP:
+		if self._modelSeries == MODEL_SERIES_ID_SSP:
 			cmd = MICMD_SETD
-			if self._modelId in MODEL_LIST_SSP90XX:
+			self._check_hwCmdSupp(cmd)
+			#
+			if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 				index += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 			cargs = self._szrObj.serialize_data([index, volt, curr], [SZR_VTYPE_IX, SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
 		else:
 			cmd = MICMD_PROM
+			self._check_hwCmdSupp(cmd)
+			#
 			valArr = []
 			vtArr = []
 			for ix in range(hwSpecs["realMemPresetLocations"]):
@@ -450,12 +413,7 @@ class MansonInstrument(object):
 
 		Returns:
 			dict: {"maxVolt": float, "maxCurr": float}
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SERIES_SSP:
-			raise FunctionNotSupportedForModelError()
-		#
 		if self._hwMax is not None:
 			return deepcopy(self._hwMax)
 		response = self._lowlev_send_get_cmd(MICMD_GMAX)
@@ -477,18 +435,20 @@ class MansonInstrument(object):
 		Raises:
 			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SSP80XX:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80:
 			raise FunctionNotSupportedForModelError()
+		cmd = MICMD_GETS
+		self._check_hwCmdSupp(cmd)
 		#
-		if self._modelId in MODEL_LIST_SSP81XX or self._modelId in MODEL_LIST_SSP83XX:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP81 or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP83:
 			cargs = self._szrObj.serialize_data([3], [SZR_VTYPE_IX])
-		elif self._modelId in MODEL_LIST_SSP90XX:
+		elif self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			cargs = self._szrObj.serialize_data([0], [SZR_VTYPE_IX])
 		else:
 			cargs = ""
-		response = self._lowlev_send_get_cmd(MICMD_GETS, cargs)
+		response = self._lowlev_send_get_cmd(cmd, cargs)
 		#
-		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
+		if self._modelSeries == MODEL_SERIES_ID_NTP or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			vt1 = SZR_VTYPE_VARVOLT
 			vt2 = SZR_VTYPE_VARCURR
 		else:
@@ -508,14 +468,18 @@ class MansonInstrument(object):
 		Raises:
 			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SSP80XX:
-			raise FunctionNotSupportedForModelError()
 		assert isinstance(volt, (int, float)), "volt needs to be int or float"
 		assert isinstance(curr, (int, float)), "curr needs to be int or float"
 		#
-		if self._modelId in MODEL_LIST_SERIES_NTP:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80:
+			raise FunctionNotSupportedForModelError()
+		#
+		if self._modelSeries == MODEL_SERIES_ID_NTP:
+			cmd = MICMD_SETD
+			self._check_hwCmdSupp(cmd)
+			#
 			cargs = self._szrObj.serialize_data([volt, curr], [SZR_VTYPE_VOLT, SZR_VTYPE_CURR])
-			self._lowlev_send_set_cmd(MICMD_SETD, cargs)
+			self._lowlev_send_set_cmd(cmd, cargs)
 		else:
 			self.set_preset_voltage(volt)
 			self.set_preset_current(curr)
@@ -528,7 +492,7 @@ class MansonInstrument(object):
 		Raises:
 			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SSP80XX:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80:
 			raise FunctionNotSupportedForModelError()
 		#
 		cmdAndCargs = self._get_cmd_set_volt_or_curr(volt, "volt", isVolt=True)
@@ -542,7 +506,7 @@ class MansonInstrument(object):
 		Raises:
 			FunctionNotSupportedForModelError
 		"""
-		if self._modelId in MODEL_LIST_SSP80XX:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP80:
 			raise FunctionNotSupportedForModelError()
 		#
 		cmdAndCargs = self._get_cmd_set_volt_or_curr(curr, "curr", isVolt=False)
@@ -556,12 +520,7 @@ class MansonInstrument(object):
 
 		Returns:
 			dict: {"maxVolt": float, "maxCurr": float}
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId not in MODEL_LIST_SERIES_NTP:
-			raise FunctionNotSupportedForModelError()
-		#
 		if self._hwMin is not None:
 			return deepcopy(self._hwMin)
 		response = self._lowlev_send_get_cmd(MICMD_GMIN)
@@ -582,12 +541,7 @@ class MansonInstrument(object):
 			str: Range ID (one of RANGE_ID_0_16V0_5A0, RANGE_ID_1_27V0_3A0, RANGE_ID_2_36V0_2A2)
 		Raises:
 			ValueError
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId not in MODEL_LIST_SSP80XX:
-			raise FunctionNotSupportedForModelError()
-		#
 		response = self._lowlev_send_get_cmd(MICMD_GCHA)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_RANGE])
@@ -602,16 +556,16 @@ class MansonInstrument(object):
 		Parameters:
 			rangeId (str): Range ID (one of RANGE_ID_0_16V0_5A0, RANGE_ID_1_27V0_3A0, RANGE_ID_2_36V0_2A2)
 		Raises:
-			FunctionNotSupportedForModelError
 			ValueError
 		"""
-		if self._modelId not in MODEL_LIST_SSP80XX:
-			raise FunctionNotSupportedForModelError()
 		if rangeId not in [RANGE_ID_0_16V0_5A0, RANGE_ID_1_27V0_3A0, RANGE_ID_2_36V0_2A2]:
 			raise ValueError("rangeId needs to be one of RANGE_ID_*")
 		#
+		cmd = MICMD_SCHA
+		self._check_hwCmdSupp(cmd)
+		#
 		cargs = self._szrObj.serialize_data([int(rangeId)], [SZR_VTYPE_RANGE])
-		self._lowlev_send_set_cmd(MICMD_SCHA, cargs)
+		self._lowlev_send_set_cmd(cmd, cargs)
 
 	# --------------------------------------------------------------------------
 	# SSP Series only
@@ -621,28 +575,40 @@ class MansonInstrument(object):
 
 		Returns:
 			int
-		Raises:
-			FunctionNotSupportedForModelError
 		"""
-		if self._modelId not in MODEL_LIST_SERIES_SSP:
-			raise FunctionNotSupportedForModelError()
-		#
 		response = self._lowlev_send_get_cmd(MICMD_GABC)
 		#
 		tmpUd = self._szrObj.unserialize_data(response, [SZR_VTYPE_IX])
 		tmpIx = tmpUd[0]["val"]
-		if self._modelId in MODEL_LIST_SSP90XX:
+		if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			tmpIx -= 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 		return tmpIx
 
 	# --------------------------------------------------------------------------
 	# --------------------------------------------------------------------------
 
-	def _lowlev_send_cmd(self, cmd, extraWait=False):
+	def _check_hwCmdSupp(self, cmd):
+		""" Check if command is supported by the current hardware
+
+		Parameters:
+			cmd (str)
+		Raises:
+			FunctionNotSupportedForModelError, ValueError
+		"""
+		assert isinstance(cmd, str), "cmd needs to be string"
+		#
+		if self._modelHwCmdSupp is None:
+			if cmd != MICMD_GMOD and cmd != MICMD_GVER:
+				raise ValueError("need to call get_hw_specs(modelId=None) first")
+		elif not self._modelHwCmdSupp[cmd]:
+			raise FunctionNotSupportedForModelError()
+
+	def _lowlev_send_cmd(self, cmd, cargs, extraWait=False):
 		""" Send command to hardware and return response
 
 		Parameters:
 			cmd (str)
+			cargs (str)
 			extraWait (bool)
 		Returns:
 			str
@@ -650,13 +616,17 @@ class MansonInstrument(object):
 			NotConnectedError
 		"""
 		assert isinstance(cmd, str), "cmd needs to be string"
+		assert isinstance(cargs, str), "cargs needs to be string"
 		assert extraWait == True or extraWait == False, "extraWait needs to be bool"
+		#
+		self._check_hwCmdSupp(cmd)
 		#
 		if self._pyserObj is None:
 			raise NotConnectedError()
-		if not cmd.endswith("\r"):
-			cmd = cmd + "\r"
-		#print("S: '%s'" % cmd.replace("\r", "@"))
+		if cmd.endswith("\r"):
+			cmd = cmd[0:-1]
+		cmd += cargs + "\r"
+		#print("-- S: '%s' --" % cmd.replace("\r", "@"))
 		self._pyserObj.write(cmd.encode("ascii"))
 		if not self._isEmulated:
 			time.sleep(0.1 + (0.9 if extraWait else 0.0))
@@ -675,7 +645,7 @@ class MansonInstrument(object):
 			cargs (str)
 			extraWait (bool)
 		"""
-		return self._lowlev_send_cmd(cmd + cargs, extraWait=extraWait)
+		return self._lowlev_send_cmd(cmd, cargs, extraWait=extraWait)
 
 	def _lowlev_send_set_cmd(self, cmd, cargs, extraWait=False):
 		""" Send SET command to hardware and validate response
@@ -684,10 +654,8 @@ class MansonInstrument(object):
 			cmd (str)
 			cargs (str)
 			extraWait (bool)
-		Raises:
-			InvalidResponseError
 		"""
-		response = self._lowlev_send_cmd(cmd + cargs, extraWait=extraWait)
+		response = self._lowlev_send_cmd(cmd, cargs, extraWait=extraWait)
 		self._szrObj.unserialize_data(response, [])
 
 	def _get_cmd_set_volt_or_curr(self, valFloat, varName, isVolt):
@@ -700,17 +668,17 @@ class MansonInstrument(object):
 		Returns:
 			dict: {"cmd": str, "cargs": str}
 		"""
-		if self._modelId in MODEL_LIST_SSP80XX:
-			raise FunctionNotSupportedForModelError()
 		assert isinstance(valFloat, (int, float)), "%s needs to be int or float" % varName
 		assert isinstance(varName, str), "varName needs to be string"
 		assert isVolt == True or isVolt == False, "isVolt needs to be bool"
 		#
 		cmd = MICMD_VOLT if isVolt else MICMD_CURR
+		self._check_hwCmdSupp(cmd)
+		#
 		valArr = []
 		vtArr = []
-		if self._modelId in MODEL_LIST_SERIES_SSP:
-			valArr.append(0 if self._modelId in MODEL_LIST_SSP90XX else 3)
+		if self._modelSeries == MODEL_SERIES_ID_SSP:
+			valArr.append(0 if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90 else 3)
 			vtArr.append(SZR_VTYPE_IX)
 		valArr.append(valFloat)
 		vtArr.append(SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR)
@@ -731,10 +699,12 @@ class MansonInstrument(object):
 		assert isinstance(varName, str), "varName needs to be string"
 		assert isVolt == True or isVolt == False, "isVolt needs to be bool"
 		#
-		if self._modelId in MODEL_LIST_SERIES_NTP:
+		if self._modelSeries == MODEL_SERIES_ID_NTP:
 			cmd = MICMD_SVSH if isVolt else MICMD_SISH
 		else:
 			cmd = MICMD_SOVP if isVolt else MICMD_SOCP
+		self._check_hwCmdSupp(cmd)
+		#
 		cargs = self._szrObj.serialize_data([valFloat], [SZR_VTYPE_VOLT if isVolt else SZR_VTYPE_CURR])
 		return {"cmd": cmd, "cargs": cargs}
 
@@ -746,11 +716,11 @@ class MansonInstrument(object):
 		"""
 		response = self._lowlev_send_get_cmd(MICMD_GETD)
 		#
-		if self._modelId in MODEL_LIST_SERIES_NTP or self._modelId in MODEL_LIST_SSP90XX:
+		if self._modelSeries == MODEL_SERIES_ID_NTP or self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 			vt1 = SZR_VTYPE_VARVOLT
 			vt2 = SZR_VTYPE_VARCURR
 		else:
-			isHcsSeries = self._modelId in MODEL_LIST_SERIES_HCS
+			isHcsSeries = self._modelSeries == MODEL_SERIES_ID_HCS
 			vt1 = (SZR_VTYPE_SPECVOLT if isHcsSeries else SZR_VTYPE_VOLT)
 			vt2 = (SZR_VTYPE_SPECCURR if isHcsSeries else SZR_VTYPE_CURR)
 		tmpUd = self._szrObj.unserialize_data(response, [vt1, vt2, SZR_VTYPE_MODE])
@@ -767,17 +737,21 @@ class MansonInstrument(object):
 		#
 		self._memPresets = []
 		hwSpecs = self.get_hw_specs()
-		if self._modelId in MODEL_LIST_SERIES_SSP:
-			if self._modelId in MODEL_LIST_SSP90XX:
+		if self._modelSeries == MODEL_SERIES_ID_SSP:
+			if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 				vtArr = [SZR_VTYPE_VARVOLT, SZR_VTYPE_VARCURR]
 			else:
 				vtArr = [SZR_VTYPE_VOLT, SZR_VTYPE_CURR]
+			#
+			cmd = MICMD_GETS
+			self._check_hwCmdSupp(cmd)
+			#
 			for ix in range(hwSpecs["realMemPresetLocations"]):
 				tmpIx = ix
-				if self._modelId in MODEL_LIST_SSP90XX:
+				if self._modelSubSeries == MODEL_SUBSERIES_ID_SSP90:
 					tmpIx += 1  # on SSP-90XX the preset #0 is the "Normal Mode"
 				cargs = self._szrObj.serialize_data([tmpIx], [SZR_VTYPE_IX])
-				response = self._lowlev_send_get_cmd(MICMD_GETS, cargs)
+				response = self._lowlev_send_get_cmd(cmd, cargs)
 				tmpUd = self._szrObj.unserialize_data(response, vtArr)
 				tmpV = tmpUd[0]["val"]
 				tmpC = tmpUd[1]["val"]
